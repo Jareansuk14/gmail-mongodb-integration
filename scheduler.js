@@ -1,16 +1,14 @@
+// GMAIL-MONGODB-INTEGRATION/scheduler.js
 const cron = require('node-cron');
-const { authorize, checkTokenStatus } = require('./auth');
+const { authorize } = require('./auth');
 const { fetchEmails } = require('./gmail');
 const { saveEmails } = require('./db');
 
 async function checkNewEmails() {
-  console.log(`[${new Date().toLocaleString('th-TH')}] Checking for new emails from Forward SMS...`);
+  console.log('🔍 Checking for new emails from Forward SMS...');
+  global.lastEmailCheck = new Date().toISOString(); // เก็บเวลาการเช็คล่าสุด
   
   try {
-    // ตรวจสอบสถานะ token ก่อน
-    const tokenStatus = await checkTokenStatus();
-    console.log('Token Status:', tokenStatus);
-    
     const auth = await authorize();
     if (!auth) {
       console.log('Authentication required. Please run the server and authenticate first.');
@@ -18,7 +16,7 @@ async function checkNewEmails() {
     }
     
     const emails = await fetchEmails(auth);
-    console.log(`Found ${emails.length} emails from Forward SMS`);
+    console.log(`📧 Found ${emails.length} emails from Forward SMS`);
     
     if (emails.length > 0) {
       // แสดงข้อมูลที่ประมวลผลแล้ว
@@ -39,27 +37,24 @@ async function checkNewEmails() {
       });
       
       const result = await saveEmails(emails);
-      console.log(`\n${result.insertedCount} new emails saved to MongoDB`);
-    } else {
-      console.log('No new emails found.');
+      console.log(`\n💾 ${result.insertedCount} new emails saved to MongoDB`);
     }
-  } catch (error) {
-    console.error('Error in email checking process:', error);
     
-    // ถ้าเป็น error เกี่ยวกับ authentication ให้แสดงข้อความช่วยเหลือ
-    if (error.message && error.message.includes('invalid_grant')) {
-      console.log('Token may have expired or been revoked. Please re-authenticate.');
-    }
+    return { success: true, emailsFound: emails.length };
+  } catch (error) {
+    console.error('❌ Error in email checking process:', error);
+    return { success: false, error: error.message };
   }
 }
 
 function startScheduler() {
   // ตั้งค่าให้ทำงานทุก 3 นาที
   cron.schedule('*/3 * * * *', checkNewEmails);
-  console.log('Scheduler started. Checking for new emails every 3 minutes...');
+  console.log('⏰ Scheduler started. Checking for new emails every 3 minutes...');
   
   // ทำงานครั้งแรกทันที
   checkNewEmails();
 }
 
-module.exports = { startScheduler };
+// Export ฟังก์ชันเพื่อให้ server.js เรียกใช้ได้
+module.exports = { startScheduler, checkNewEmails };

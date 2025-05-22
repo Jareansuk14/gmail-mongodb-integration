@@ -1,11 +1,17 @@
-//GMAIL-MONGODB-INTEGRATION/server.js
+// GMAIL-MONGODB-INTEGRATION/server.js
 const express = require('express');
+const cors = require('cors'); // เพิ่มบรรทัดนี้
 const { getAuthUrl, getToken } = require('./auth');
 const { startScheduler } = require('./scheduler');
+const { checkNewEmails } = require('./scheduler'); // เพิ่มบรรทัดนี้
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// เพิ่ม middleware
+app.use(express.json());
+app.use(cors()); // เพิ่มบรรทัดนี้เพื่อให้ LINE Bot เรียกได้
 
 app.get('/', async (req, res) => {
   const authUrl = await getAuthUrl();
@@ -87,6 +93,39 @@ app.get('/', async (req, res) => {
     </body>
     </html>
   `);
+});
+
+// เพิ่ม endpoint สำหรับตรวจสอบอีเมลแบบ manual
+app.post('/check-emails', async (req, res) => {
+  try {
+    console.log('📞 Manual email check requested from LINE Bot');
+    console.log('🕐 Time:', new Date().toLocaleString());
+    
+    // เรียกฟังก์ชันตรวจสอบอีเมลทันที
+    await checkNewEmails();
+    
+    res.json({ 
+      success: true, 
+      message: 'Email check completed',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error in manual email check:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Email check failed: ' + error.message 
+    });
+  }
+});
+
+// เพิ่ม endpoint สำหรับตรวจสอบสถานะ
+app.get('/status', (req, res) => {
+  res.json({
+    status: 'running',
+    service: 'Gmail to MongoDB Integration',
+    timestamp: new Date().toISOString(),
+    lastCheck: global.lastEmailCheck || 'Not available'
+  });
 });
 
 app.get('/auth/google/callback', async (req, res) => {
