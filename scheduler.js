@@ -1,13 +1,16 @@
-//GMAIL-MONGODB-INTEGRATION/scheduler.js
 const cron = require('node-cron');
-const { authorize } = require('./auth');
+const { authorize, checkTokenStatus } = require('./auth');
 const { fetchEmails } = require('./gmail');
 const { saveEmails } = require('./db');
 
 async function checkNewEmails() {
-  console.log('Checking for new emails from Forward SMS...');
+  console.log(`[${new Date().toLocaleString('th-TH')}] Checking for new emails from Forward SMS...`);
   
   try {
+    // ตรวจสอบสถานะ token ก่อน
+    const tokenStatus = await checkTokenStatus();
+    console.log('Token Status:', tokenStatus);
+    
     const auth = await authorize();
     if (!auth) {
       console.log('Authentication required. Please run the server and authenticate first.');
@@ -37,9 +40,16 @@ async function checkNewEmails() {
       
       const result = await saveEmails(emails);
       console.log(`\n${result.insertedCount} new emails saved to MongoDB`);
+    } else {
+      console.log('No new emails found.');
     }
   } catch (error) {
     console.error('Error in email checking process:', error);
+    
+    // ถ้าเป็น error เกี่ยวกับ authentication ให้แสดงข้อความช่วยเหลือ
+    if (error.message && error.message.includes('invalid_grant')) {
+      console.log('Token may have expired or been revoked. Please re-authenticate.');
+    }
   }
 }
 
